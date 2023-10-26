@@ -93,39 +93,39 @@ export async function POST(req: Request) {
 
   // const data = new experimental_StreamData();
   const stream = OpenAIStream(response, {
-    // experimental_onFunctionCall: async ({ name, arguments: args }, createFunctionCallMessages) => {
-    //   if (args.intent === "recipes") {
-    //     const recipes = [
-    //       {
-    //         title: "Sweet potato and coconut soup",
-    //         link: "https://www.bbcgoodfood.com/recipes/speedy-sweet-potato-soup-coconut",
-    //       },
-    //       {
-    //         title: "Vegan leek & potato soup",
-    //         link: "https://www.bbcgoodfood.com/recipes/vegan-leek-potato-soup",
-    //       },
-    //     ];
+    experimental_onFunctionCall: async ({ name, arguments: args }, createFunctionCallMessages) => {
+      if (args.intent === "recipes") {
+        const recipes = [
+          {
+            title: "Sweet potato and coconut soup",
+            link: "https://www.bbcgoodfood.com/recipes/speedy-sweet-potato-soup-coconut",
+          },
+          {
+            title: "Vegan leek & potato soup",
+            link: "https://www.bbcgoodfood.com/recipes/vegan-leek-potato-soup",
+          },
+        ];
 
-    //     // data.append(recipes);
+        // data.append(recipes);
 
-    //     const newMessages = createFunctionCallMessages(recipes);
-    //     return openai.chat.completions.create({
-    //       messages: [...messages, ...newMessages],
-    //       stream: true,
-    //       model: "gpt-3.5-turbo-0613",
-    //       functions: recipe_response_functions,
-    //       function_call: {
-    //         name: "create_recipes_response",
-    //       },
-    //     });
-    //   } else if (args.intent === "general_info") {
-    //     return openai.chat.completions.create({
-    //       messages: [...messages],
-    //       stream: true,
-    //       model: "gpt-3.5-turbo-0613",
-    //     });
-    //   }
-    // },
+        const newMessages = createFunctionCallMessages(recipes);
+        return openai.chat.completions.create({
+          messages: [...messages, ...newMessages],
+          stream: true,
+          model: "gpt-3.5-turbo-0613",
+          functions: recipe_response_functions,
+          function_call: {
+            name: "create_recipes_response",
+          },
+        });
+      } else if (args.intent === "general_info") {
+        return openai.chat.completions.create({
+          messages: [...messages],
+          stream: true,
+          model: "gpt-3.5-turbo-0613",
+        });
+      }
+    },
     onCompletion(completion) {
       console.log("completion", completion);
     },

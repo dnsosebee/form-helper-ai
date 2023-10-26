@@ -1,42 +1,27 @@
-# Vercel AI SDK, Next.js, and OpenAI Chat Example
+# FormBuddy
+> **_NOTE:_**  This repo is under development. So far only the README is relevant.
 
-This example shows how to use the [Vercel AI SDK](https://sdk.vercel.ai/docs) with [Next.js](https://nextjs.org/) and [OpenAI](https://openai.com) to create a ChatGPT-like AI-powered streaming chat bot.
+FormBuddy is an ai-assisted tool for completing government forms. FormBuddy has two main interfaces -- on the left, a *chat and event log*, and on the right, a *form ui*. As a user of FormBuddy, you are free to fill out the form as normal without AI getting in the way. However, whenever you need help, the chat assistant is waiting for you and can assist you with *instructions that are contextualized to your current progress in the form* as well as *generative UI form elements* that bind to the form.
 
-## Deploy your own
+Why government forms? Because they are important, difficult, and our LLM (gpt-3.5) already has enough contextual information to answer questions about them. Another way to think about this project is "What if the collective internet knowledge of how to fill out government forms were integrated into an interface for filling out government forms".
 
-Deploy the example using [Vercel](https://vercel.com?utm_source=github&utm_medium=readme&utm_campaign=ai-sdk-example):
+## Development Plan
+### Form Definitions
+Forms will be defined using [JSON Schema](https://json-schema.org/) and their look will be customized using [React JSON Schema Form](https://rjsf-team.github.io/react-jsonschema-form/docs/).
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fai%2Ftree%2Fmain%2Fexamples%2Fnext-openai&env=OPENAI_API_KEY&envDescription=OpenAI%20API%20Key&envLink=https%3A%2F%2Fplatform.openai.com%2Faccount%2Fapi-keys&project-name=vercel-ai-chat-openai&repository-name=vercel-ai-chat-openai)
+We will start out with just one form, perhaps the w4. So we will need to make a JSON Schema for that. Shouldn't be too hard, but some manual labor to be sure!
 
-## How to use
+### State Management
+FormBuddy will be a NextJS app using the Vercel AI SDK for state management of chat data. State management for forms will be handled by React JSON Schema Form. All state will be client-side only, and later we can consider adding persistence.
 
-Execute [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app) with [npm](https://docs.npmjs.com/cli/init), [Yarn](https://yarnpkg.com/lang/en/docs/cli/create/), or [pnpm](https://pnpm.io) to bootstrap the example:
+### Chat Interface
+The chat interface will stay up-to-date with the user's progress, displaying their edit history as well as clearly showing the currently next form item to fill out. There will be a text input for questions about the active step, which are answered by an LLM that has context of the user's progress so far and the form schema (or some useful subset of it). So the chat interface is a slower, simpler, and more conversational interface, whereas the form interface is fast and provides good contextual clues. The user gets the best of both worlds in that they may focus on one interface or the other, and while they do that the other interface reacts accordingly.
 
-```bash
-npx create-next-app --example https://github.com/vercel/ai/tree/main/examples/next-openai next-openai-app
-```
+### Agent state machine
+The chat log is driven in part by a deterministic finite-state machine that reacts to user events, and by a non-deterministic LLM agent that runs it's own FSM on the backend. The backend process will involve a "fan out" where first an LLM classifies the intent of the user question, then an LLM with full context of the user's progress answers the question and provides generative UI.
 
-```bash
-yarn create next-app --example https://github.com/vercel/ai/tree/main/examples/next-openai next-openai-app
-```
+### Streaming generative UI
+When getting LLM output we will stream JSON from OpenAI's function calling interface and optimistically parse it on the frontend. Once we know which Gen UI template we are using, we then basically hydrate a react component with whatever mixture of text and gen UI is streamed from OpenAI.
 
-```bash
-pnpm create next-app --example https://github.com/vercel/ai/tree/main/examples/next-openai next-openai-app
-```
-
-To run the example locally you need to:
-
-1. Sign up at [OpenAI's Developer Platform](https://platform.openai.com/signup).
-2. Go to [OpenAI's dashboard](https://platform.openai.com/account/api-keys) and create an API KEY.
-3. Set the required OpenAI environment variable as the token value as shown [the example env file](./.env.local.example) but in a new file called `.env.local`
-4. `pnpm install` to install the required dependencies.
-5. `pnpm dev` to launch the development server.
-
-## Learn More
-
-To learn more about OpenAI, Next.js, and the Vercel AI SDK take a look at the following resources:
-
-- [Vercel AI SDK docs](https://sdk.vercel.ai/docs)
-- [Vercel AI Playground](https://play.vercel.ai)
-- [OpenAI Documentation](https://platform.openai.com/docs) - learn about OpenAI features and API.
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+### Threading
+Much like Slack/iMessage, we can have a threading feature where the user can reply to a question in particular. Similarly, the fact that a user fills out a question can be included in that thread.

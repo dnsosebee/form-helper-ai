@@ -3,6 +3,8 @@
 import { FunctionCallHandler } from "ai";
 import { Message, useChat } from "ai/react";
 
+// get pdf from '/fw4.pdf'
+
 export default function Chat() {
   const functionCallHandler: FunctionCallHandler = async (chatMessages, functionCall) => {
     console.log("\n\n\n");
@@ -15,6 +17,7 @@ export default function Chat() {
     api: "/api/chat",
     experimental_onFunctionCall: functionCallHandler,
   });
+  
 
   // Generate a map of message role to text color
   const roleToColorMap: Record<Message["role"], string> = {
