@@ -10,7 +10,7 @@ import {
   CREATE_SUBMIT_TASK_RESPONSE_WITH_ANSWER_FUNCTION_NAME,
   fieldEventResponseFunctions,
   messageEventResponseFunctions,
-} from "./functions";
+} from "../../../model/functions";
 import {
   AgentEvent,
   AssistantFieldResponseEvent,
@@ -18,7 +18,7 @@ import {
   UserMessageEvent,
   ValidationState,
   chatRequestParamsZodSchema,
-} from "./interface";
+} from "../../../model/interface";
 // Create an OpenAI API client (that's edge friendly!)
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "",
