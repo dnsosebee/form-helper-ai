@@ -1,6 +1,24 @@
 import { OpenAIStream, StreamingTextResponse } from "ai";
 import OpenAI from "openai";
-import type { ChatCompletionCreateParams } from "openai/resources/chat";
+import { ChatCompletionMessage } from "openai/resources/chat";
+import {
+  CREATE_FIELD_TASK_RESPONSE_FUNCTION_NAME,
+  CREATE_FIELD_TASK_RESPONSE_WITH_ANSWER_FUNCTION_NAME,
+  CREATE_QUESTION_TASK_RESPONSE_FUNCTION_NAME,
+  CREATE_QUESTION_TASK_RESPONSE_WITH_ANSWER_FUNCTION_NAME,
+  CREATE_SUBMIT_TASK_RESPONSE_FUNCTION_NAME,
+  CREATE_SUBMIT_TASK_RESPONSE_WITH_ANSWER_FUNCTION_NAME,
+  fieldEventResponseFunctions,
+  messageEventResponseFunctions,
+} from "./functions";
+import {
+  AgentEvent,
+  AssistantFieldResponseEvent,
+  UserFieldEvent,
+  UserMessageEvent,
+  ValidationState,
+  chatRequestParamsZodSchema,
+} from "./interface";
 // Create an OpenAI API client (that's edge friendly!)
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "",
@@ -11,121 +29,120 @@ const openai = new OpenAI({
 // IMPORTANT! Set the runtime to edge
 export const runtime = "edge";
 
-const intent_classification_functions: ChatCompletionCreateParams.Function[] = [
-  {
-    name: "classify_intent",
-    description:
-      "Determine if user wants a list of recipes, or if they want general information about RecipeBot.",
-    parameters: {
-      type: "object",
-      properties: {
-        intent: {
-          type: "string",
-          enum: ["recipes", "general_info"],
-          description: "The user intent classification.",
-        },
-      },
-      required: ["intent"],
-    },
-  },
-];
+const assistantFieldResponseEventToFunctionCallName = (
+  event: AssistantFieldResponseEvent
+): string => {
+  if (event.answer) {
+    switch (event.task.type) {
+      case "submit":
+        return CREATE_SUBMIT_TASK_RESPONSE_FUNCTION_NAME;
+      case "question":
+        return CREATE_QUESTION_TASK_RESPONSE_FUNCTION_NAME;
+      case "field":
+        return CREATE_FIELD_TASK_RESPONSE_FUNCTION_NAME;
+      default:
+        throw new Error("Unknown task type");
+    }
+  }
+  switch (event.task.type) {
+    case "submit":
+      return CREATE_SUBMIT_TASK_RESPONSE_WITH_ANSWER_FUNCTION_NAME;
+    case "question":
+      return CREATE_QUESTION_TASK_RESPONSE_WITH_ANSWER_FUNCTION_NAME;
+    case "field":
+      return CREATE_FIELD_TASK_RESPONSE_WITH_ANSWER_FUNCTION_NAME;
+    default:
+      throw new Error("Unknown task type");
+  }
+};
 
-const recipe_response_functions: ChatCompletionCreateParams.Function[] = [
-  {
-    name: "create_recipes_response",
-    description: "Create a response to the user based on the recipes they want.",
-    parameters: {
-      type: "object",
-      properties: {
-        introduction: {
-          type: "string",
-          description:
-            "The introduction to the response. Can be something like 'Here are some recipes for you:', but more creative to fit the user's question.",
-        },
-        recipes: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              context: {
-                type: "string",
-                description:
-                  'Context to be provided above the link to this particular recipe. For example, "A delicious vegan soup".',
-              },
-              link: {
-                type: "string",
-                description: "A link to the recipe.",
-              },
-            },
-            required: ["context", "link"],
-          },
-        },
-        followUp1: {
-          type: "string",
-          description:
-            "A follow up question that the user may want to ask you. For example, 'Would you like to see more recipes?'",
-        },
-        followUp2: {
-          type: "string",
-          description:
-            "A follow up question that the user may want to ask you. For example, 'Would you like to see more recipes?'. Must differ from followUp1.",
+const getMessages = (agentEvents: AgentEvent[], validationState: ValidationState): ChatCompletionMessage[] => {
+  const messages = agentEvents.map((event) => {
+    if (event.agent === "user" && event.target === "chat") {
+      const e = event as UserMessageEvent;
+      return {
+        role: "user",
+        content: e.message,
+      } as ChatCompletionMessage;
+    } else if (event.agent === "user" && event.target.startsWith("field.")) {
+      const e = event as UserFieldEvent;
+      return {
+        role: "user",
+        content: e.error || "",
+      } as ChatCompletionMessage;
+    }
+    const e = event as AssistantFieldResponseEvent;
+    return {
+      role: "assistant",
+      content: null,
+      functionCall: {
+        name: assistantFieldResponseEventToFunctionCallName(e),
+        arguments: {
+          answer: e.answer || "",
+          ...e.task,
         },
       },
-      required: ["introduction", "recipes", "followUp1", "followUp2"],
-    },
-  },
-];
+    } as ChatCompletionMessage;
+  });
+
+  const systemMessage = {
+    role: "system",
+    content: `You must select a function in order to respond to the user, since the functions provided are the only way to communicate with the user (a plain response will not work). ${validationState.valid ? "The form is in a valid state." : `The form is not yet in a valid state, and the first invalid field is the field named "${validationState.target}", which has the error "${validationState.error}".`}`,
+  } as ChatCompletionMessage;
+
+  messages.push(systemMessage);
+
+  return messages;
+};
 
 export async function POST(req: Request) {
   const json = await req.json();
-  console.log("json", json);
-  const { messages } = json;
+  const { agentEvents, validationState } = chatRequestParamsZodSchema.parse(json);
+  const latestEvent = agentEvents[agentEvents.length - 1];
+  const latestEventIsMessage = latestEvent.agent === "user" && latestEvent.target === "chat";
 
   const response = await openai.chat.completions.create({
-    model: "gpt-3.5-turbo-0613",
+    model: "gpt-4-1106-preview", //"gpt-3.5-turbo-0613",
     stream: true,
-    messages,
-    functions: intent_classification_functions,
-    function_call: {
-      name: "classify_intent",
-    },
+    messages: getMessages(agentEvents, validationState),
+    functions: latestEventIsMessage ? messageEventResponseFunctions : fieldEventResponseFunctions,
   });
 
   // const data = new experimental_StreamData();
   const stream = OpenAIStream(response, {
-    experimental_onFunctionCall: async ({ name, arguments: args }, createFunctionCallMessages) => {
-      if (args.intent === "recipes") {
-        const recipes = [
-          {
-            title: "Sweet potato and coconut soup",
-            link: "https://www.bbcgoodfood.com/recipes/speedy-sweet-potato-soup-coconut",
-          },
-          {
-            title: "Vegan leek & potato soup",
-            link: "https://www.bbcgoodfood.com/recipes/vegan-leek-potato-soup",
-          },
-        ];
+    // experimental_onFunctionCall: async ({ name, arguments: args }, createFunctionCallMessages) => {
+    //   if (args.intent === "recipes") {
+    //     const recipes = [
+    //       {
+    //         title: "Sweet potato and coconut soup",
+    //         link: "https://www.bbcgoodfood.com/recipes/speedy-sweet-potato-soup-coconut",
+    //       },
+    //       {
+    //         title: "Vegan leek & potato soup",
+    //         link: "https://www.bbcgoodfood.com/recipes/vegan-leek-potato-soup",
+    //       },
+    //     ];
 
-        // data.append(recipes);
+    //     // data.append(recipes);
 
-        const newMessages = createFunctionCallMessages(recipes);
-        return openai.chat.completions.create({
-          messages: [...messages, ...newMessages],
-          stream: true,
-          model: "gpt-3.5-turbo-0613",
-          functions: recipe_response_functions,
-          function_call: {
-            name: "create_recipes_response",
-          },
-        });
-      } else if (args.intent === "general_info") {
-        return openai.chat.completions.create({
-          messages: [...messages],
-          stream: true,
-          model: "gpt-3.5-turbo-0613",
-        });
-      }
-    },
+    //     const newMessages = createFunctionCallMessages(recipes);
+    //     return openai.chat.completions.create({
+    //       messages: [...messages, ...newMessages],
+    //       stream: true,
+    //       model: "gpt-3.5-turbo-0613",
+    //       functions: recipe_response_functions,
+    //       function_call: {
+    //         name: "create_recipes_response",
+    //       },
+    //     });
+    //   } else if (args.intent === "general_info") {
+    //     return openai.chat.completions.create({
+    //       messages: [...messages],
+    //       stream: true,
+    //       model: "gpt-3.5-turbo-0613",
+    //     });
+    //   }
+    // },
     onCompletion(completion) {
       console.log("completion", completion);
     },

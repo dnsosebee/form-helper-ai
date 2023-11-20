@@ -9,11 +9,30 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@hookform/resolvers": "^3.3.2",
+    "@radix-ui/react-label": "^2.0.2",
+    "@radix-ui/react-select": "^2.0.0",
+    "@radix-ui/react-slot": "^1.0.2",
+    "@radix-ui/react-toast": "^1.1.5",
+    "@rjsf/core": "^5.13.2",
+    "@rjsf/utils": "^5.13.2",
+    "@rjsf/validator-ajv8": "^5.13.2",
+    "@xstate/react": "^3.2.2",
     "ai": "^2.2.18",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.0.0",
+    "lucide-react": "^0.289.0",
+    "nanoid": "^5.0.3",
     "next": "13.4.12",
     "openai": "4.11.0",
     "react": "18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.47.0",
+    "tailwind-merge": "^1.14.0",
+    "tailwindcss-animate": "^1.0.7",
+    "xstate": "^4.38.3",
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.21.4"
   },
   "devDependencies": {
     "@types/node": "^17.0.12",
