@@ -1,4 +1,4 @@
-import { fieldTargets } from "@/app/profileForm";
+import { fieldTargets } from "@/model/profileForm";
 import { ChatCompletionCreateParams } from "openai/resources/chat";
 import { z } from "zod";
 import zodToJsonSchema from "zod-to-json-schema";
@@ -58,7 +58,7 @@ export const questionTaskZodSchema = z.object({
 // we have the user focus context. We have the formstate. We have the active suggestion. We have the conversation history, interleaved with relevant events.
 // User focus doesn't live in the event stream, it lives next to the input.
 
-const baseAnswerZodSchema = z.object({
+export const baseAnswerZodSchema = z.object({
   answer: z.string().describe("Your detailed answer to the user's question."),
 });
 
@@ -87,7 +87,7 @@ export const fieldEventResponseFunctions: ChatCompletionCreateParams.Function[] 
   },
 ];
 
-export const chatEventResponseFunctions: ChatCompletionCreateParams.Function[] = [
+export const messageEventResponseFunctions: ChatCompletionCreateParams.Function[] = [
   {
     name: CREATE_SUBMIT_TASK_RESPONSE_WITH_ANSWER_FUNCTION_NAME,
     description: "This function provides the user with a response to their question or statement, and produces a task in the UI instructing the user to submit the form. Only select this function if the user has completed the form.",

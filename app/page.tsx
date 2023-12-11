@@ -24,20 +24,19 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
+import { UserMessageEvent } from "@/model/interface";
+import { getResponse, state } from "@/model/state";
+import { nanoid } from "nanoid";
 import Link from "next/link";
-import { useState } from "react";
-import { ProfileFormValues, defaultValues, profileFormZodSchema } from "./profileForm";
-
-export type UserEvent = {
-  data: any;
-}
+import { useSnapshot } from "valtio";
+import { ProfileFormValues, defaultValues, profileFormZodSchema } from "../model/profileForm";
 
 export default function Chat() {
   // const { messages, input, handleInputChange, handleSubmit, setMessages } = useChat({
   //   api: "/api/chat",
   //   experimental_onFunctionCall: async (message) => {return},
   // });
-  const [events, setEvents] = useState<any[]>([]);
+  const snap = useSnapshot(state);
 
   // Generate a map of message role to text color
   const roleToColorMap: Record<Message["role"], string> = {
@@ -53,6 +52,8 @@ export default function Chat() {
     mode: "onChange",
     shouldUseNativeValidation: true,
   });
+
+  // TODO use watch with a callback to update the form state in Signia
 
   // const { fields, append } = useFieldArray({
   //   name: "urls",
@@ -93,25 +94,44 @@ export default function Chat() {
 
   // }
 
-  // const eventSource = new SSE(`api/chat0.2`, {
-  //   headers: {
-  //     apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
-  //     Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-  //     "Content-Type": "application/json",
-  //   },
-  //   payload: JSON.stringify({
-  //     chatEvents: [{ name: "user_message", data: { message: question } }],
-  //     chat_id,
-  //     qa_pair_id,
-  //   }),
-  // });
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const event: UserMessageEvent = {
+      id: nanoid(),
+      agent: "user",
+      message: state.input,
+      target: "chat",
+      action: "message"
+    }
+    state.input = "";
+    state.agentEvents.push(event);
+    e.preventDefault();
 
+    const values = form.getValues();
+    const zodResult = profileFormZodSchema.safeParse(values);
+
+
+    let validationState;
+    if (zodResult.success) {
+      validationState = {
+        valid: true as const,
+      }
+    } else {
+      const firstError = zodResult.error.errors[0];
+      const firstErrorField = firstError.path[0];
+      validationState = {
+        valid: false as const,
+        target: `field.${firstErrorField}`,
+        error: firstError.message,
+      }
+    }
+    getResponse(validationState)
+  }
 
 
   return (
     <div className="flex">
-      {/* <div className="flex flex-col w-full max-w-md py-24 mx-auto stretch">
-        {messages.length > 0
+      <div className="flex flex-col w-full max-w-md py-24 mx-auto stretch">
+        {/* {messages.length > 0
           ? messages.map((m: Message) => (
               <div
                 key={m.id}
@@ -124,17 +144,17 @@ export default function Chat() {
                 <br />
               </div>
             ))
-          : null}
+          : null} */}
         <div id="chart-goes-here"></div>
         <form onSubmit={handleSubmit}>
           <input
             className="fixed bottom-0 w-full max-w-md p-2 mb-8 border border-gray-300 rounded shadow-xl"
-            value={input}
+            value={snap.input}
             placeholder="Say something..."
-            onChange={handleInputChange}
+            onChange={(e) => state.input = e.target.value}
           />
         </form>
-      </div> */}
+      </div>
       <div className="flex flex-col w-full max-w-md py-24 mx-auto stretch">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onValid)} className="space-y-8" onChange={handleFormChange} onFocus={handleFocus}>

@@ -1,8 +1,9 @@
-import { fieldTargets } from "@/app/profileForm";
+import { fieldTargets } from "@/model/profileForm";
 import z from "zod";
 import { fieldTaskZodSchema, questionTaskZodSchema, submitTaskZodSchema } from "./functions";
 
 const userMessageEventZodSchema = z.object({
+  id: z.string(),
   agent: z.literal("user"),
   target: z.literal("chat"),
   action: z.literal("message"),
@@ -13,15 +14,26 @@ const userMessageEventZodSchema = z.object({
 
 export type UserMessageEvent = z.infer<typeof userMessageEventZodSchema>;
 
+// We expect this to mean that the user has made a change to the field.
 const userFieldEventZodSchema = z.object({
+  id: z.string(),
   agent: z.literal("user"),
   target: z.enum(fieldTargets as [string, ...string[]]),
-  error: z.string().optional(),
+  validation: z.discriminatedUnion("valid", [
+    z.object({
+      valid: z.literal(true),
+    }),
+    z.object({
+      valid: z.literal(false),
+      error: z.string(),
+    }),
+  ]),
 });
 
 export type UserFieldEvent = z.infer<typeof userFieldEventZodSchema>;
 
-const assistantFieldResponseEventZodSchema = z.object({
+export const assistantMessageEventZodSchema = z.object({
+  id: z.string(),
   agent: z.literal("assistant"),
   target: z.literal("chat"),
   action: z.literal("generateUI"),
@@ -57,12 +69,12 @@ const assistantFieldResponseEventZodSchema = z.object({
   ]),
 });
 
-export type AssistantFieldResponseEvent = z.infer<typeof assistantFieldResponseEventZodSchema>;
+export type AssistantMessageEventZodSchema = z.infer<typeof assistantMessageEventZodSchema>;
 
-const agentEventZodSchema = z.union([
+export const agentEventZodSchema = z.union([
   userMessageEventZodSchema,
   userFieldEventZodSchema,
-  assistantFieldResponseEventZodSchema,
+  assistantMessageEventZodSchema,
 ]);
 
 export type AgentEvent = z.infer<typeof agentEventZodSchema>;

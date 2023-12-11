@@ -1,6 +1,6 @@
 import { OpenAIStream, StreamingTextResponse } from "ai";
 import OpenAI from "openai";
-import { ChatCompletionMessage } from "openai/resources/chat";
+import { ChatCompletionMessageParam } from "openai/resources";
 import {
   CREATE_FIELD_TASK_RESPONSE_FUNCTION_NAME,
   CREATE_FIELD_TASK_RESPONSE_WITH_ANSWER_FUNCTION_NAME,
@@ -13,7 +13,7 @@ import {
 } from "../../../model/functions";
 import {
   AgentEvent,
-  AssistantFieldResponseEvent,
+  AssistantMessageEventZodSchema,
   UserFieldEvent,
   UserMessageEvent,
   ValidationState,
@@ -23,14 +23,10 @@ import {
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "",
 });
-// import {z} from "zod";
-// import {zodToJsonSchema} from "zod-to-json-schema";
-
-// IMPORTANT! Set the runtime to edge
 export const runtime = "edge";
 
 const assistantFieldResponseEventToFunctionCallName = (
-  event: AssistantFieldResponseEvent
+  event: AssistantMessageEventZodSchema
 ): string => {
   if (event.answer) {
     switch (event.task.type) {
@@ -56,22 +52,25 @@ const assistantFieldResponseEventToFunctionCallName = (
   }
 };
 
-const getMessages = (agentEvents: AgentEvent[], validationState: ValidationState): ChatCompletionMessage[] => {
+const getMessages = (
+  agentEvents: AgentEvent[],
+  validationState: ValidationState
+): ChatCompletionMessageParam[] => {
   const messages = agentEvents.map((event) => {
     if (event.agent === "user" && event.target === "chat") {
       const e = event as UserMessageEvent;
       return {
-        role: "user",
+        role: "user" as const,
         content: e.message,
-      } as ChatCompletionMessage;
+      } as ChatCompletionMessageParam;
     } else if (event.agent === "user" && event.target.startsWith("field.")) {
       const e = event as UserFieldEvent;
       return {
-        role: "user",
-        content: e.error || "",
-      } as ChatCompletionMessage;
+        role: "system",
+        content: JSON.stringify(e),
+      } as ChatCompletionMessageParam;
     }
-    const e = event as AssistantFieldResponseEvent;
+    const e = event as AssistantMessageEventZodSchema;
     return {
       role: "assistant",
       content: null,
@@ -82,13 +81,17 @@ const getMessages = (agentEvents: AgentEvent[], validationState: ValidationState
           ...e.task,
         },
       },
-    } as ChatCompletionMessage;
+    } as ChatCompletionMessageParam;
   });
 
   const systemMessage = {
     role: "system",
-    content: `You must select a function in order to respond to the user, since the functions provided are the only way to communicate with the user (a plain response will not work). ${validationState.valid ? "The form is in a valid state." : `The form is not yet in a valid state, and the first invalid field is the field named "${validationState.target}", which has the error "${validationState.error}".`}`,
-  } as ChatCompletionMessage;
+    content: `You must select a function in order to respond to the user, since the functions provided are the only way to communicate with the user (a plain response will not work). ${
+      validationState.valid
+        ? "The form is in a valid state."
+        : `The form is not yet in a valid state, and the first invalid field is the field named "${validationState.target}", which has the error "${validationState.error}".`
+    }`,
+  } as ChatCompletionMessageParam;
 
   messages.push(systemMessage);
 
@@ -97,6 +100,7 @@ const getMessages = (agentEvents: AgentEvent[], validationState: ValidationState
 
 export async function POST(req: Request) {
   const json = await req.json();
+  console.log({ received: json });
   const { agentEvents, validationState } = chatRequestParamsZodSchema.parse(json);
   const latestEvent = agentEvents[agentEvents.length - 1];
   const latestEventIsMessage = latestEvent.agent === "user" && latestEvent.target === "chat";
@@ -105,56 +109,22 @@ export async function POST(req: Request) {
     model: "gpt-4-1106-preview", //"gpt-3.5-turbo-0613",
     stream: true,
     messages: getMessages(agentEvents, validationState),
-    functions: latestEventIsMessage ? messageEventResponseFunctions : fieldEventResponseFunctions,
+   tools: latestEventIsMessage ? messageEventResponseFunctions.map(f => ({
+    type: 'function',
+    function: f,
+   })) : fieldEventResponseFunctions.map(f => ({
+    type: 'function',
+    function: f,
+    })),
+    tool_choice: 'auto',
+    // functions: latestEventIsMessage ? messageEventResponseFunctions : fieldEventResponseFunctions,
   });
 
-  // const data = new experimental_StreamData();
-  const stream = OpenAIStream(response, {
-    // experimental_onFunctionCall: async ({ name, arguments: args }, createFunctionCallMessages) => {
-    //   if (args.intent === "recipes") {
-    //     const recipes = [
-    //       {
-    //         title: "Sweet potato and coconut soup",
-    //         link: "https://www.bbcgoodfood.com/recipes/speedy-sweet-potato-soup-coconut",
-    //       },
-    //       {
-    //         title: "Vegan leek & potato soup",
-    //         link: "https://www.bbcgoodfood.com/recipes/vegan-leek-potato-soup",
-    //       },
-    //     ];
+  
 
-    //     // data.append(recipes);
 
-    //     const newMessages = createFunctionCallMessages(recipes);
-    //     return openai.chat.completions.create({
-    //       messages: [...messages, ...newMessages],
-    //       stream: true,
-    //       model: "gpt-3.5-turbo-0613",
-    //       functions: recipe_response_functions,
-    //       function_call: {
-    //         name: "create_recipes_response",
-    //       },
-    //     });
-    //   } else if (args.intent === "general_info") {
-    //     return openai.chat.completions.create({
-    //       messages: [...messages],
-    //       stream: true,
-    //       model: "gpt-3.5-turbo-0613",
-    //     });
-    //   }
-    // },
-    onCompletion(completion) {
-      console.log("completion", completion);
-    },
-    onFinal(completion) {
-      // data.close();
-    },
-    // experimental_streamData: true,
-  });
-
-  // data.append({
-  //   text: "Hello, how are you?",
-  // });
-
-  return new StreamingTextResponse(stream, {});
+  // Convert the response into a friendly text-stream
+  const stream = OpenAIStream(response);
+  // Respond with the stream
+  return new StreamingTextResponse(stream);
 }
