@@ -1,7 +1,6 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Message } from "ai/react";
 import { useForm } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
@@ -24,12 +23,12 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
-import { UserMessageEvent } from "@/model/interface";
-import { getResponse, state } from "@/model/state";
+import { DEFAULT_FORM_VALUES, state } from "@/model/client/state";
+import { UserMessageEvent } from "@/model/shared/types/agentEvent";
 import { nanoid } from "nanoid";
 import Link from "next/link";
 import { useSnapshot } from "valtio";
-import { ProfileFormValues, defaultValues, profileFormZodSchema } from "../model/profileForm";
+import { FormValues } from "../model/shared/types/form";
 
 export default function Chat() {
   // const { messages, input, handleInputChange, handleSubmit, setMessages } = useChat({
@@ -39,16 +38,16 @@ export default function Chat() {
   const snap = useSnapshot(state);
 
   // Generate a map of message role to text color
-  const roleToColorMap: Record<Message["role"], string> = {
-    system: "red",
-    user: "black",
-    function: "blue",
-    assistant: "green",
-  };
+  // const roleToColorMap: Record<Message["role"], string> = {
+  //   system: "red",
+  //   user: "black",
+  //   function: "blue",
+  //   assistant: "green",
+  // };
 
-  const form = useForm<ProfileFormValues>({
-    resolver: zodResolver(profileFormZodSchema),
-    defaultValues,
+  const form = useForm<FormValues>({
+    resolver: zodResolver(FormValues),
+    defaultValues: DEFAULT_FORM_VALUES,
     mode: "onChange",
     shouldUseNativeValidation: true,
   });
@@ -60,7 +59,7 @@ export default function Chat() {
   //   control: form.control,
   // });
 
-  function onValid(data: ProfileFormValues) {
+  function onValid(data: FormValues) {
     console.log("here");
     toast({
       title: "You submitted the following values:",
@@ -73,12 +72,12 @@ export default function Chat() {
   }
 
   function handleFormChange(e: React.ChangeEvent<HTMLFormElement>) {
-    console.log({target: e.target});
-  };
+    console.log({ target: e.target });
+  }
 
   function handleFocus(e: React.FocusEvent<HTMLFormElement>) {
-    console.log({target: e.target});
-  };
+    console.log({ target: e.target });
+  }
 
   // function registerFocus(e: React.FocusEvent<HTMLFormElement>) {
   //   // check if target is an interactive element
@@ -100,21 +99,20 @@ export default function Chat() {
       agent: "user",
       message: state.input,
       target: "chat",
-      action: "message"
-    }
+      action: "message",
+    };
     state.input = "";
     state.agentEvents.push(event);
     e.preventDefault();
 
     const values = form.getValues();
-    const zodResult = profileFormZodSchema.safeParse(values);
-
+    const zodResult = FormValues.safeParse(values);
 
     let validationState;
     if (zodResult.success) {
       validationState = {
         valid: true as const,
-      }
+      };
     } else {
       const firstError = zodResult.error.errors[0];
       const firstErrorField = firstError.path[0];
@@ -122,11 +120,10 @@ export default function Chat() {
         valid: false as const,
         target: `field.${firstErrorField}`,
         error: firstError.message,
-      }
+      };
     }
-    getResponse(validationState)
-  }
-
+    getResponse(validationState);
+  };
 
   return (
     <div className="flex">
@@ -151,13 +148,18 @@ export default function Chat() {
             className="fixed bottom-0 w-full max-w-md p-2 mb-8 border border-gray-300 rounded shadow-xl"
             value={snap.input}
             placeholder="Say something..."
-            onChange={(e) => state.input = e.target.value}
+            onChange={(e) => (state.input = e.target.value)}
           />
         </form>
       </div>
       <div className="flex flex-col w-full max-w-md py-24 mx-auto stretch">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onValid)} className="space-y-8" onChange={handleFormChange} onFocus={handleFocus}>
+          <form
+            onSubmit={form.handleSubmit(onValid)}
+            className="space-y-8"
+            onChange={handleFormChange}
+            onFocus={handleFocus}
+          >
             <FormField
               control={form.control}
               name="username"

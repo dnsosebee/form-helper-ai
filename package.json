@@ -16,7 +16,6 @@
     "@radix-ui/react-slot": "^1.0.2",
     "@radix-ui/react-toast": "^1.1.5",
     "@xstate/react": "^3.2.2",
-    "ai": "^2.2.18",
     "best-effort-json-parser": "^1.0.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
